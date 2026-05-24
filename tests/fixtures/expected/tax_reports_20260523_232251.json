@@ -1,0 +1,110 @@
+[
+    {
+        "year": 2025,
+        "declarations": [
+            {
+                "form": "2042",
+                "box": "2DC",
+                "description": "Revenus des actions et parts",
+                "value": 0.0
+            },
+            {
+                "form": "2042",
+                "box": "3VG",
+                "description": "Plus-values de cession de valeurs mobilières",
+                "value": 33.53
+            },
+            {
+                "form": "2042",
+                "box": "3VH",
+                "description": "Moins-values de cession de valeurs mobilières",
+                "value": 0.0
+            },
+            {
+                "form": "2042",
+                "box": "8VL",
+                "description": "Crédits d'impôt sur valeurs étrangères",
+                "value": 0.0
+            },
+            {
+                "form": "2042",
+                "box": "8UU",
+                "description": "Comptes ouverts, détenus, utilisés ou clos à l'étranger",
+                "value": "OUI (N26 Upvest)"
+            },
+            {
+                "form": "2047",
+                "box": "L260",
+                "description": "Récapitulatif des dividendes",
+                "value": 0.0
+            },
+            {
+                "form": "2047",
+                "box": "L30",
+                "description": "Plus-values étrangères (report en 3VG)",
+                "value": 33.53
+            },
+            {
+                "form": "2074",
+                "box": "L21",
+                "description": "Plus-values",
+                "value": 33.53
+            }
+        ],
+        "form_2047_details": []
+    },
+    {
+        "year": 2026,
+        "declarations": [
+            {
+                "form": "2042",
+                "box": "2DC",
+                "description": "Revenus des actions et parts",
+                "value": 0.0
+            },
+            {
+                "form": "2042",
+                "box": "3VG",
+                "description": "Plus-values de cession de valeurs mobilières",
+                "value": 32.72
+            },
+            {
+                "form": "2042",
+                "box": "3VH",
+                "description": "Moins-values de cession de valeurs mobilières",
+                "value": 0.0
+            },
+            {
+                "form": "2042",
+                "box": "8VL",
+                "description": "Crédits d'impôt sur valeurs étrangères",
+                "value": 0.0
+            },
+            {
+                "form": "2042",
+                "box": "8UU",
+                "description": "Comptes ouverts, détenus, utilisés ou clos à l'étranger",
+                "value": "OUI (N26 Upvest)"
+            },
+            {
+                "form": "2047",
+                "box": "L260",
+                "description": "Récapitulatif des dividendes",
+                "value": 0.0
+            },
+            {
+                "form": "2047",
+                "box": "L30",
+                "description": "Plus-values étrangères (report en 3VG)",
+                "value": 32.72
+            },
+            {
+                "form": "2074",
+                "box": "L21",
+                "description": "Plus-values",
+                "value": 32.72
+            }
+        ],
+        "form_2047_details": []
+    }
+]

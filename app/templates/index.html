@@ -1,0 +1,160 @@
+{% extends "base.html" %} {% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <!-- 1. Need Help / Quick Instructions Panel -->
+        <div class="card mb-4" style="background-color: #f8f9fa">
+            <div class="card-body">
+                <h6 class="card-title">❓ Quick Instructions</h6>
+                <ul class="mb-0 small text-muted">
+                    <li>Go to N26: tap profile → Support Center → Messages.</li>
+                    <li>
+                        Download all documents starting with `buy_order_`,
+                        `sell_order_` and `income_distribution_`.
+                    </li>
+                    <li>
+                        Upload all PDF files at once (order doesn't matter). Any
+                        non-matching file is automatically ignored.
+                    </li>
+                    <li>
+                        Results include tax forms 2042, 2047, and audit trail.
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- 2. Main Upload Container Card -->
+        <div class="card shadow mb-4">
+            <div class="card-body p-5">
+                <h2 class="card-title mb-4">📁 Upload N26 Documents</h2>
+
+                <!-- Drag and Drop Target -->
+                <div
+                    id="drop-zone"
+                    class="border-2 border-dashed rounded p-5 text-center"
+                    style="
+                        border-color: #ccc;
+                        cursor: pointer;
+                        transition: all 0.3s;
+                    "
+                >
+                    <svg
+                        width="64"
+                        height="64"
+                        fill="currentColor"
+                        class="mb-3 text-muted"
+                        viewBox="0 0 16 16"
+                    >
+                        <path
+                            d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492zM5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0z"
+                        />
+                        <path
+                            d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52l-.094-.319zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 0 0 2.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 0 0 1.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 0 0-1.115 2.693l.16.291c.415.764-.42 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 0 0-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 0 0-2.692-1.115l-.292.16c-.764.415-1.6-.42-1.184-1.185l.159-.291A1.873 1.873 0 0 0 1.945 12.83l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 0 0 3.06 8.897l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.291.159a1.873 1.873 0 0 0 2.693-1.116l.094-.319zm.351 1.647a.5.5 0 0 1 .573.224l3.5 7a.5.5 0 0 1-.925.389l-3.5-7a.5.5 0 0 1 .352-.613z"
+                        />
+                    </svg>
+                    <h5 class="mb-2">Drag and drop PDF files here</h5>
+                    <p class="text-muted mb-3">or click to browse</p>
+                    <div
+                        class="alert alert-info py-2 px-3 d-inline-block small mb-0"
+                    >
+                        <strong>Expected formats:</strong>
+                        <code>buy_order_*</code>, <code>sell_order_*</code>, or
+                        <code>income_distribution_*</code>
+                    </div>
+                </div>
+
+                <!-- Hidden Native File Inputs -->
+                <form id="upload-form" class="mt-4" style="display: none">
+                    <input
+                        type="file"
+                        id="file-input"
+                        name="files"
+                        multiple
+                        accept=".pdf"
+                        style="display: none"
+                    />
+                </form>
+
+                <!-- File Processing Queue Panel (hidden until files are selected) -->
+                <div id="file-list" class="mt-4" style="display: none">
+                    <button
+                        type="button"
+                        id="submit-btn"
+                        class="btn btn-primary btn-lg w-100 mb-3"
+                    >
+                        ✅ Analyze Documents
+                    </button>
+
+                    <div class="accordion" id="filesAccordion">
+                        <div class="accordion-item">
+                            <h2 class="accordion-header" id="headingFiles">
+                                <button
+                                    class="accordion-button collapsed py-2"
+                                    type="button"
+                                    data-bs-toggle="collapse"
+                                    data-bs-target="#collapseFiles"
+                                    aria-expanded="false"
+                                    aria-controls="collapseFiles"
+                                >
+                                    📋 Show selected files (<span
+                                        id="file-count"
+                                        >0</span
+                                    >)
+                                </button>
+                            </h2>
+                            <div
+                                id="collapseFiles"
+                                class="accordion-collapse collapse"
+                                aria-labelledby="headingFiles"
+                                data-bs-parent="#filesAccordion"
+                            >
+                                <div class="accordion-body p-0">
+                                    <ul
+                                        id="file-items"
+                                        class="list-group list-group-flush"
+                                        style="
+                                            max-height: 250px;
+                                            overflow-y: auto;
+                                        "
+                                    >
+                                        <!-- Dynamically populated via upload.js -->
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button
+                        type="button"
+                        id="clear-btn"
+                        class="btn btn-outline-secondary mt-3 w-100"
+                    >
+                        Clear Files
+                    </button>
+                </div>
+
+                <!-- Real-time Progress Bar -->
+                <div id="progress-container" style="display: none" class="mt-4">
+                    <div class="mb-3">
+                        <small class="text-muted">Processing...</small>
+                        <div class="progress" style="height: 24px">
+                            <div
+                                id="progress-bar"
+                                class="progress-bar progress-bar-striped progress-bar-animated"
+                                role="progressbar"
+                                style="width: 0%"
+                            ></div>
+                        </div>
+                    </div>
+                    <p id="progress-text" class="text-muted text-center small">
+                        Initializing...
+                    </p>
+                </div>
+            </div>
+        </div>
+
+
+    </div>
+</div>
+{% endblock %} {% block extra_js %}
+<script src="{{ url_for('static', filename='js/upload.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-10 mx-auto">
+
+        <!-- Success banner -->
+        <div class="alert alert-success" role="alert">
+            <h4 class="alert-heading">Processing Complete!</h4>
+            <p class="mb-0">
+                {{ summary.transaction_count }} transactions processed.
+                Generated on {{ generated_at.strftime('%Y-%m-%d %H:%M:%S') }}
+            </p>
+        </div>
+
+        <!-- Download results with year selector -->
+        <div class="card mb-4">
+            <div class="card-header bg-light">
+                <h6 class="mb-0">Download Results</h6>
+            </div>
+            <div class="card-body">
+                <div class="list-group">
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <div class="d-flex align-items-center gap-2">
+                            <h6 class="mb-1 me-2">tax_report</h6>
+                            <select id="year-select" class="form-select form-select-sm" style="width: auto;" onchange="updateExcelLink()">
+                                {% for y in years %}
+                                <option value="{{ y.year }}" {% if y.year == latest_year %}selected{% endif %}>{{ y.year }}</option>
+                                {% endfor %}
+                            </select>
+                            <span class="badge bg-primary">Excel</span>
+                        </div>
+                        <a href="#" id="excel-download-link" class="btn btn-sm btn-primary">Download</a>
+                    </div>
+                    <a href="/download/{{ session_id }}/transactions.csv" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-1">transactions.csv</h6>
+                            <small class="text-muted">Detailed transaction log for verification</small>
+                        </div>
+                        <span class="badge bg-secondary">CSV</span>
+                    </a>
+                </div>
+                <button class="btn btn-primary mt-3 w-100" onclick="downloadAll('{{ session_id }}')">
+                    Download All Files (ZIP)
+                </button>
+            </div>
+        </div>
+
+        <!-- Per-year tax summaries -->
+        {% for yd in years %}
+        {% set year = yd.year %}
+        <div class="card mb-4">
+            <div class="card-header bg-light">
+                <h6 class="mb-0">Tax Summary {{ year }}</h6>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    {% for decl in yd.declarations %}
+                    <tr>
+                        <td><strong>{{ decl.description }}</strong><br><small class="text-muted">{{ decl.form }} Box {{ decl.box }}</small></td>
+                        <td class="text-end font-monospace">
+                            {% if decl.box == "8UU" %}
+                                {{ decl.value }}
+                            {% else %}
+                                {{ "%.2f"|format(decl.value) }} &euro;
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </table>
+            </div>
+        </div>
+        {% endfor %}
+
+        <!-- Remaining positions -->
+        {% for yd in years if yd.positions %}
+        <div class="card mb-4">
+            <div class="card-header bg-light">
+                <h6 class="mb-0">Remaining Positions ({{ yd.year }})</h6>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Ticker</th>
+                            <th class="text-end font-monospace">Quantity</th>
+                            <th class="text-end font-monospace">Total Cost (&euro;)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for pos in yd.positions %}
+                        <tr>
+                            <td><a href="https://finance.yahoo.com/quote/{{ pos.ticker }}" target="_blank" rel="noopener">{{ pos.ticker }}</a></td>
+                            <td class="text-end font-monospace">{{ "%.2f"|format(pos.quantity) }}</td>
+                            <td class="text-end font-monospace">{{ "%.2f"|format(pos.total_cost) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endfor %}
+
+        <!-- Transaction type filter buttons -->
+        <div class="card">
+            <div class="card-header bg-light d-flex flex-wrap align-items-center gap-2">
+                <h6 class="mb-0 me-2">Transactions</h6>
+                <div class="btn-group btn-group-sm" role="group">
+                    <button type="button" class="btn btn-outline-secondary active filter-btn" data-filter="all">All</button>
+                    <button type="button" class="btn btn-outline-success filter-btn" data-filter="Buy">Buys</button>
+                    <button type="button" class="btn btn-outline-danger filter-btn" data-filter="Sell">Sells</button>
+                    <button type="button" class="btn btn-outline-info filter-btn" data-filter="Dividend">Dividends</button>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm mb-0" id="tx-table">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Date</th>
+                            <th>Type</th>
+                            <th>Ticker</th>
+                            <th class="text-end font-monospace">Quantity</th>
+                            <th class="text-end font-monospace">Net Cash Flow (&euro;)</th>
+                            <th class="text-end font-monospace">Fees (&euro;)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for tx in transactions %}
+                        <tr class="tx-row" data-type="{{ tx.get('Type', '') }}">
+                            <td>{{ tx.get('Date', '-') }}</td>
+                            <td>
+                                {% set tx_type = tx.get('Type', '') %}
+                                {% if 'Buy' in tx_type %}
+                                    <span class="badge bg-success">BUY</span>
+                                {% elif 'Sell' in tx_type %}
+                                    <span class="badge bg-danger">SELL</span>
+                                {% else %}
+                                    <span class="badge bg-info">{{ tx_type }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% set ticker = tx.get('Ticker', '') %}
+                                {% if ticker %}
+                                <a href="https://finance.yahoo.com/quote/{{ ticker }}" target="_blank" rel="noopener">{{ ticker }}</a>
+                                {% else %}-{% endif %}
+                            </td>
+                            <td class="text-end font-monospace">{{ tx.get('Quantity', '-') }}</td>
+                            <td class="text-end font-monospace">{{ "%.2f"|format(tx.get('Net_cash_flow', 0)|float) }}</td>
+                            <td class="text-end font-monospace">{{ "%.2f"|format(tx.get('Fees', 0)|float) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Action buttons -->
+        <div class="mt-4 mb-4 text-center">
+            <a href="/" class="btn btn-outline-primary">Upload New Files</a>
+            <a href="/history" class="btn btn-outline-secondary">View History</a>
+        </div>
+
+    </div>
+</div>
+
+<script>
+function downloadAll(sessionId) {
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = `/download-all/${sessionId}`;
+    document.body.appendChild(form);
+    form.submit();
+    document.body.removeChild(form);
+}
+
+function updateExcelLink() {
+    const sel = document.getElementById('year-select');
+    const year = sel.value;
+    const link = document.getElementById('excel-download-link');
+    link.href = '/download/{{ session_id }}/tax_report_' + year + '.xlsx';
+}
+
+// Set initial Excel link
+document.addEventListener('DOMContentLoaded', function() {
+    updateExcelLink();
+
+    // Transaction type filter
+    document.querySelectorAll('.filter-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.filter-btn').forEach(function(b) {
+                b.classList.remove('active');
+            });
+            this.classList.add('active');
+            const filter = this.getAttribute('data-filter');
+            document.querySelectorAll('.tx-row').forEach(function(row) {
+                const type = row.getAttribute('data-type') || '';
+                if (filter === 'all' || type.includes(filter)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        });
+    });
+});
+</script>
+{% endblock %}

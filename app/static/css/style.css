@@ -1,0 +1,51 @@
+/* Custom styles */
+
+.navbar-brand {
+    font-size: 1.3rem;
+    letter-spacing: 0.5px;
+}
+
+.border-dashed {
+    border-style: dashed !important;
+}
+
+.card {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.badge {
+    font-weight: 500;
+    padding: 0.4rem 0.6rem;
+}
+
+.table-sm th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+}
+
+.alert {
+    border-radius: 0.5rem;
+}
+
+.btn {
+    border-radius: 0.4rem;
+}
+
+.list-group-item {
+    border: 1px solid #e0e0e0;
+}
+
+.progress {
+    background-color: #e9ecef;
+    border-radius: 0.25rem;
+}
+
+footer {
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+}
+
+main.container {
+    padding-bottom: 30px;
+}

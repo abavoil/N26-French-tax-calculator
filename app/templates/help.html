@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <h2 class="mb-4">❓ Help & Documentation</h2>
+
+        <div class="card mb-4">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">Getting Started</h5>
+            </div>
+            <div class="card-body">
+                <h6>1. Download Documents from N26</h6>
+                <ol>
+                    <li>Open N26 mobile app</li>
+                    <li>Tap your profile picture (top-right)</li>
+                    <li>Select "Support Center" → "Messages from N26"</li>
+                    <li>Download all: <code>buy_order_</code>, <code>sell_order_</code>, <code>income_distribution_</code> documents</li>
+                </ol>
+                <p class="text-muted small mt-3"><strong>Note:</strong> This can be slow on mobile. Consider using the web version.</p>
+
+                <h6 class="mt-4">2. Upload to This Tool</h6>
+                <ol>
+                    <li>Go to <a href="/">Home</a></li>
+                    <li>Drag-and-drop all PDF files (or click to browse)</li>
+                    <li>Click "Analyze Documents"</li>
+                </ol>
+
+                <h6 class="mt-4">3. Download Tax Report</h6>
+                <ol>
+                    <li>Results will show key metrics and files</li>
+                    <li>Download the <code>tax_report.xlsx</code> file</li>
+                    <li>Use it for your tax filing or share with your tax advisor</li>
+                </ol>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">Understanding the Report</h5>
+            </div>
+            <div class="card-body">
+                <h6>Excel File Contents</h6>
+                <ul>
+                    <li><strong>Declarations</strong> - Summary of tax form boxes (2042, 2047, 2074)</li>
+                    <li><strong>Transactions</strong> - Detailed list of all buys, sells, and dividends</li>
+                </ul>
+
+                <h6 class="mt-4">Key Tax Boxes (French Tax)</h6>
+                <table class="table table-sm small">
+                    <tr>
+                        <td><strong>2042 Box 2DC</strong></td>
+                        <td>Dividend income</td>
+                    </tr>
+                    <tr>
+                        <td><strong>2042 Box 3VG</strong></td>
+                        <td>Capital gains (positive)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>2042 Box 3VH</strong></td>
+                        <td>Capital losses (negative)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>2042 Box 8VL</strong></td>
+                        <td>Foreign tax credits</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">Troubleshooting</h5>
+            </div>
+            <div class="card-body">
+                <h6>❌ "OCR Failed" Error</h6>
+                <p>The PDF could not be read. This might happen if:</p>
+                <ul>
+                    <li>File is corrupted or incomplete</li>
+                    <li>File is from an unusual document format</li>
+                    <li class="mb-2"><strong>Solution:</strong> Try re-downloading the document from N26</li>
+                </ul>
+
+                <h6>❌ "Data Not Found" Error</h6>
+                <p>Expected fields couldn't be located. This might mean:</p>
+                <ul>
+                    <li>Document is from an older N26 format</li>
+                    <li>It's not a standard transaction/dividend statement</li>
+                    <li class="mb-2"><strong>Solution:</strong> Verify the document matches expected N26 layout</li>
+                </ul>
+
+                <h6>❌ "No Valid Documents Found"</h6>
+                <p>Uploaded files don't match N26 naming patterns.</p>
+                <ul>
+                    <li>Expected filenames start with: <code>buy_order_</code>, <code>sell_order_</code>, <code>income_distribution_</code></li>
+                    <li class="mb-2"><strong>Solution:</strong> Check filenames match and re-upload</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">Before Filing</h5>
+            </div>
+            <div class="card-body">
+                <ul>
+                    <li>✅ Always verify the report matches your N26 annual tax statement</li>
+                    <li>✅ Review all transaction dates and amounts</li>
+                    <li>✅ Check for any errors or unusual entries</li>
+                    <li>✅ Cross-check capital gains/losses calculation</li>
+                    <li>✅ Consult with a tax advisor if unsure about any values</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="mt-4 text-center">
+            <a href="/" class="btn btn-primary">Start Analysis</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
