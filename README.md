@@ -10,11 +10,11 @@ Simple web app to generate French tax reports from N26 investment statements.
 
 ### Installation
 
-**macOS:**
+**macOS (only):**
 ```bash
 git clone https://github.com/abavoil/n26-tax-calculator
 cd n26-tax-calculator
-bash install.sh
+brew install uv  # Python package manager
 ```
 
 ### Start the App
@@ -30,9 +30,10 @@ Then open your browser to: **http://localhost:5000**
 1. **Download documents from N26**
    - Mobile app → Profile → Support Center → Messages
    - Look for: `buy_order_*.pdf`, `sell_order_*.pdf`, `income_distribution_*.pdf`
+   - a sample can be found in `tests/fixtures/pdfs/`
 
 2. **Upload to the web app**
-   - Drag-and-drop files or click to browse
+   - Drag-and-drop files or click to browse (Select all files at once)
    - Click "Analyze Documents"
 
 3. **Download tax report**
@@ -73,7 +74,6 @@ See the **Help** page in the app or visit `/help` for detailed troubleshooting.
 ⚠️ **Always verify** the report matches your N26 annual tax statement before filing.
 
 - Check all transaction dates and amounts
-- Review capital gains/losses calculations
 - Verify dividend amounts by country
 - Consult with a tax advisor if unsure
 
@@ -84,8 +84,3 @@ Apache 2.0 - See LICENSE file
 ## 🤝 Contributing
 
 Bug reports and suggestions welcome! Open an issue on GitHub.
-
----
-
-**Version**: 1.0.0  
-**Last Updated**: May 2024
