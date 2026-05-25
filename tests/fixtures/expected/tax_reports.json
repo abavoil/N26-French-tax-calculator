@@ -6,7 +6,7 @@
                 "form": "2042",
                 "box": "2DC",
                 "description": "Revenus des actions et parts",
-                "value": 0.0
+                "value": 2.51
             },
             {
                 "form": "2042",
@@ -24,7 +24,7 @@
                 "form": "2042",
                 "box": "8VL",
                 "description": "Crédits d'impôt sur valeurs étrangères",
-                "value": 0.0
+                "value": 0.63
             },
             {
                 "form": "2042",
@@ -36,7 +36,7 @@
                 "form": "2047",
                 "box": "L260",
                 "description": "Récapitulatif des dividendes",
-                "value": 0.0
+                "value": 2.51
             },
             {
                 "form": "2047",
@@ -60,7 +60,7 @@
                 "form": "2042",
                 "box": "2DC",
                 "description": "Revenus des actions et parts",
-                "value": 0.0
+                "value": 0.03
             },
             {
                 "form": "2042",
@@ -90,7 +90,7 @@
                 "form": "2047",
                 "box": "L260",
                 "description": "Récapitulatif des dividendes",
-                "value": 0.0
+                "value": 0.03
             },
             {
                 "form": "2047",
@@ -105,6 +105,15 @@
                 "value": 32.72
             }
         ],
-        "form_2047_details": []
+        "form_2047_details": [
+            {
+                "L202_Pays": "États-Unis",
+                "L203_Montant_net_encaisse": 0.03,
+                "L204_Taux_applicable": "cf. Annexe",
+                "L205_Resultat": "L203*L204",
+                "L206_Impot_supporte_etranger": 0.0,
+                "L207_Credit_impot_retenu": "min(L205, L206)"
+            }
+        ]
     }
 ]

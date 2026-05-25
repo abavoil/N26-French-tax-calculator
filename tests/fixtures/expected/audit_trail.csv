@@ -11,10 +11,12 @@ Date,Ticker,Type,Quantity,Price_per_unit,Net_cash_flow,Fees,Currency,Total_Qty,P
 2025-04-29,IPN.PA,Sell,0.99,99.05,97.78,0.00,EUR,0.00,0.00,Doc: sell_order_38a4f000-7a81-476c-810d-2cca783a250e.pdf | Gain/Loss: 4.86
 2025-04-29,SU.PA,Buy,0.99,203.60,-203.21,0.81,EUR,0.99,204.41,Doc: buy_order_2a28f369-0a65-433f-a280-612c753b251f.pdf
 2025-04-30,ORA.PA,Sell,40.06,12.63,505.81,0.00,EUR,0.00,0.00,Doc: sell_order_ddba024c-439d-4071-aab4-bb013c2b7045.pdf | Gain/Loss: 3.81
+2025-05-16,SU.PA,Dividend,0.99,0.00,1.88,0.00,EUR,0.99,204.41,Doc: income_distribution_481b0c17-4dba-4e5e-9010-93c8e9eebcef.pdf | Gross Amount: 2.51 | Tax : 0.63
 2026-03-06,GB00B15KXV33.SG,Buy,19.47,10.24,-199.32,0.00,EUR,19.47,10.24,Doc: buy_order_f41b0b1f-6875-4ef4-b7f2-d3f3e6084067.pdf
 2026-03-09,GB00B15KXV33.SG,Buy,7.60,13.00,-98.74,0.00,EUR,27.07,11.01,Doc: buy_order_ae20d3a3-fbca-44ba-9793-4a1b684951e0.pdf
 2026-03-09,GB00B15KXV33.SG,Buy,31.25,12.80,-400.00,0.00,EUR,58.31,11.97,Doc: buy_order_e905051a-ca72-4a50-9fa5-0568bc6f6c23.pdf
 2026-03-09,GB00B15KXV33.SG,Buy,23.41,12.82,-300.00,0.00,EUR,81.72,12.21,Doc: buy_order_a0824ab3-a08b-4a92-a808-40330a2501e4.pdf
 2026-03-13,GB00B15KXV33.SG,Sell,81.89,12.43,1017.96,0.00,EUR,0.00,0.00,Doc: sell_order_65c013c5-bfde-48ed-b706-9503c3915143.pdf | Gain/Loss: 17.90
+2026-04-07,NVDA,Dividend,3.59,0.00,0.03,0.00,EUR,0.00,0.00,Doc: income_distribution_318903e5-eee8-4310-a4af-e6ef71470880.pdf | Gross Amount: 0.03 | Tax : 0.00
 2026-04-08,GB00B15KXV33.SG,Buy,17.16,11.66,-200.00,0.00,EUR,17.16,11.66,Doc: buy_order_cf497d74-afaa-4488-904a-2d4ef11c28a4.pdf
 2026-04-13,GB00B15KXV33.SG,Sell,17.16,12.52,214.82,0.00,EUR,0.00,0.00,Doc: sell_order_ee238342-5feb-4262-bb61-382b17955290.pdf | Gain/Loss: 14.82
