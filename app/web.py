@@ -2,7 +2,7 @@
 Flask web application.
 """
 
-from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for, flash
+from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for, flash, Response, stream_with_context
 import logging
 import uuid
 import json
@@ -11,7 +11,7 @@ import zipfile
 import io
 import os
 
-from core.parser import parse_documents
+from core.parser import parse_documents_streaming
 from core.calculator import compute_tax_data
 from core.exporter import export_to_excel
 from utils.errors import TaxCalcError
@@ -186,117 +186,113 @@ def create_app():
             logger.exception(f"Unexpected parser failure on {file.filename}")
             return jsonify({"error": f"Failed to parse {file.filename}: {e}"}), 500
 
-    @app.route('/api/session/<session_id>/process-progress')
-    def get_process_progress(session_id):
-        """Poll progress of an active process session."""
-        from config import OUTPUT_DIR
-        prog = OUTPUT_DIR / session_id / "progress.json"
-        if prog.exists():
-            try:
-                return jsonify(json.loads(prog.read_text()))
-            except Exception:
-                pass
-        return jsonify({"phase": "waiting", "current": 0, "total": 0, "file": ""})
-
     @app.route('/api/session/<session_id>/process', methods=['POST'])
     def process_session(session_id):
-        """Run calculations, generate the Excel sheet, and finalize the session."""
+        """Run calculations, generate the Excel sheet — stream SSE progress events."""
         session_dir = OUTPUT_DIR / session_id
         upload_temp_dir = session_dir / 'upload_temp'
-        
+
         pdf_paths = list(upload_temp_dir.glob('*.pdf'))
         if not pdf_paths:
             return jsonify({"error": "No files found to process"}), 400
 
-        def _write_progress(phase, current=0, total=0, file=""):
+        def _sse(event, data):
+            return f"event: {event}\ndata: {json.dumps(data)}\n\n"
+
+        def generate():
+            failed_files = []
             try:
-                tmp = session_dir / ".progress.tmp"
-                tmp.write_text(json.dumps({
-                    "phase": phase, "current": current, "total": total, "file": file
-                }))
-                tmp.rename(session_dir / "progress.json")
-            except Exception:
-                pass
+                logger.info(f"Session {session_id}: Streaming-parse of {len(pdf_paths)} documents")
 
-        def _ocr_progress(current, total, filename):
-            _write_progress("ocr", current, total, filename)
+                # 1. Parse documents — yields progress / file_error events
+                for evt_type, evt_data in parse_documents_streaming(pdf_paths):
+                    if evt_type == "file_error":
+                        failed_files.append(evt_data)
+                        yield _sse(evt_type, evt_data)
+                    elif evt_type == "result":
+                        assets = evt_data["assets"]
+                        transactions = evt_data["transactions"]
+                        dividends = evt_data["dividends"]
+                    else:
+                        yield _sse(evt_type, evt_data)
 
-        try:
-            logger.info(f"Session {session_id}: Computing tax returns for {len(pdf_paths)} documents")
-            _write_progress("ocr", 0, len(pdf_paths), "")
-            
-            # 1. Parse all valid documents together to build the full dataset
-            assets, transactions, dividends = parse_documents(pdf_paths, progress_callback=_ocr_progress)
-            
-            # 2. Compute taxes
-            _write_progress("calc", 0, 0, "")
-            audit_rows, dashboards, positions_by_year, events_by_year = compute_tax_data(assets)
-            
-            # 3. Export one Excel per year
-            excel_files = []
-            for dash in dashboards:
-                year = dash.year
-                positions = positions_by_year.get(year, {})
-                year_events_list = events_by_year.get(year, [])
-                fname = f'tax_report_{year}.xlsx'
-                export_to_excel(assets, session_dir / fname, dashboards, audit_rows, positions, year_events_list, year)
-                excel_files.append(fname)
-            
-            # 4. Save audit trail CSV
-            csv_path = session_dir / 'transactions.csv'
-            if audit_rows:
-                import csv
-                with open(csv_path, 'w', newline='') as f:
-                    writer = csv.DictWriter(f, fieldnames=audit_rows[0].keys())
-                    writer.writeheader()
-                    writer.writerows(audit_rows)
-            
-            # 5. Build per-year data for meta.json
-            years_data = []
-            for dash in dashboards:
-                positions_list = []
-                for isin, pos in (positions_by_year.get(dash.year, {}) or {}).items():
-                    if hasattr(pos, "total_quantity") and pos.total_quantity > 0:
-                        asset = assets.get(isin)
-                        positions_list.append({
-                            "ticker": asset.ticker if asset else "",
-                            "isin": isin,
-                            "quantity": float(round(pos.total_quantity, 2)),
-                            "total_cost": float(round(pos.total_cost, 2)),
-                        })
-                years_data.append({
-                    "year": dash.year,
-                    "declarations": [
-                        {"form": d.form, "box": d.box, "description": d.description, "value": d.value}
-                        for d in dash.declarations
-                    ],
-                    "form_2047_details": dash.form_2047_details,
-                    "positions": sorted(positions_list, key=lambda x: x["ticker"]),
+                # 2. Compute taxes
+                yield _sse("phase", {"phase": "calculating"})
+                audit_rows, dashboards, positions_by_year, events_by_year = (
+                    compute_tax_data(assets) if assets else ([], [], {}, [])
+                )
+
+                # 3. Export one Excel per year
+                yield _sse("phase", {"phase": "exporting"})
+                excel_files = []
+                for dash in dashboards:
+                    year = dash.year
+                    positions = positions_by_year.get(year, {})
+                    year_events_list = events_by_year.get(year, [])
+                    fname = f'tax_report_{year}.xlsx'
+                    export_to_excel(assets, session_dir / fname, dashboards, audit_rows, positions, year_events_list, year)
+                    excel_files.append(fname)
+
+                # 4. Save audit trail CSV
+                csv_path = session_dir / 'transactions.csv'
+                if audit_rows:
+                    import csv
+                    with open(csv_path, 'w', newline='') as f:
+                        writer = csv.DictWriter(f, fieldnames=audit_rows[0].keys())
+                        writer.writeheader()
+                        writer.writerows(audit_rows)
+
+                # 5. Build meta.json
+                years_data = []
+                for dash in dashboards:
+                    positions_list = []
+                    for isin, pos in (positions_by_year.get(dash.year, {}) or {}).items():
+                        if hasattr(pos, "total_quantity") and pos.total_quantity > 0:
+                            asset = assets.get(isin)
+                            positions_list.append({
+                                "ticker": asset.ticker if asset else "",
+                                "isin": isin,
+                                "quantity": float(round(pos.total_quantity, 2)),
+                                "total_cost": float(round(pos.total_cost, 2)),
+                            })
+                    years_data.append({
+                        "year": dash.year,
+                        "declarations": [
+                            {"form": d.form, "box": d.box, "description": d.description, "value": d.value}
+                            for d in dash.declarations
+                        ],
+                        "form_2047_details": dash.form_2047_details,
+                        "positions": sorted(positions_list, key=lambda x: x["ticker"]),
+                    })
+
+                latest_year = years_data[-1]["year"] if years_data else datetime.now().year
+
+                meta = {
+                    "session_id": session_id,
+                    "timestamp": datetime.now().isoformat(),
+                    "transaction_count": len(transactions),
+                    "dividend_count": len(dividends),
+                    "asset_count": len(assets),
+                    "latest_year": latest_year,
+                    "years": years_data,
+                    "excel_files": excel_files,
+                }
+                with open(session_dir / 'meta.json', 'w') as f:
+                    json.dump(meta, f, indent=2)
+
+                yield _sse("complete", {
+                    "session_id": session_id,
+                    "failed_files": failed_files,
+                    "results_url": f"/results/{session_id}",
                 })
-            
-            latest_year = years_data[-1]["year"] if years_data else datetime.now().year
-            
-            meta = {
-                "session_id": session_id,
-                "timestamp": datetime.now().isoformat(),
-                "transaction_count": len(transactions),
-                "dividend_count": len(dividends),
-                "asset_count": len(assets),
-                "latest_year": latest_year,
-                "years": years_data,
-                "excel_files": excel_files,
-            }
-            with open(session_dir / 'meta.json', 'w') as f:
-                json.dump(meta, f, indent=2)
-                
-            _write_progress("done", 0, 0, "")
-            return jsonify({"status": "success", "session_id": session_id})
-            
-        except TaxCalcError as e:
-            return jsonify(e.to_dict()), 400
-        except Exception as e:
-            logger.exception(f"Processing failed for session {session_id}")
-            return jsonify({"error": f"Tax compilation failed: {e}"}), 500
+
+            except TaxCalcError as e:
+                yield _sse("fatal_error", e.to_dict())
+            except Exception as e:
+                logger.exception(f"Processing failed for session {session_id}")
+                yield _sse("fatal_error", {"error": f"Tax compilation failed: {e}"})
+
+        return Response(stream_with_context(generate()), mimetype='text/event-stream')
 
     @app.route('/api/session/<session_id>/exists')
     def session_exists(session_id):

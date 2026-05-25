@@ -134,13 +134,7 @@ async function uploadFiles() {
             }
         }
 
-        // Step 3: Call final computation and Excel generation
-        // NOTE: The server runs in single-threaded mode (threaded=False, see
-        // run.py) because macOS Vision's livetext framework stalls from background
-        // threads.  This means /process-progress polling DOES NOT WORK during the
-        // /process request — the bar will not advance until OCR completes.
-        // The polling code below is kept for reference (dead code with threaded=False).
-        updateProgress(10, 'Processing documents with OCR... (this may take a minute)');
+        // Step 3: Stream processing progress via SSE
         const processResponse = await fetch(`/api/session/${session_id}/process`, {
             method: 'POST'
         });
@@ -150,20 +144,79 @@ async function uploadFiles() {
             throw new Error(errData.message || errData.error || 'Tax calculations compilation failed.');
         }
 
-        updateProgress(100, 'All reports successfully generated!');
+        const reader = processResponse.body.getReader();
+        const decoder = new TextDecoder();
+        let sseBuffer = '';
+        let hasFailedFiles = false;
 
-        // Save session for navigation
-        localStorage.setItem('lastSessionId', session_id);
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
 
-        // Wait briefly for the completed progress state to render
-        setTimeout(() => {
-            window.location.href = `/results/${session_id}`;
-        }, 500);
+            sseBuffer += decoder.decode(value, { stream: true });
+            const parts = sseBuffer.split('\n\n');
+            sseBuffer = parts.pop();
+
+            for (const block of parts) {
+                if (!block.trim()) continue;
+                const evt = parseSSEBlock(block);
+                if (!evt) continue;
+
+                switch (evt.type) {
+                    case 'progress':
+                        const pct = 10 + Math.round((evt.data.current / evt.data.total) * 80);
+                        updateProgress(pct, `Processing file ${evt.data.current}/${evt.data.total} - ${evt.data.file}`);
+                        break;
+                    case 'file_error':
+                        hasFailedFiles = true;
+                        break;
+                    case 'phase':
+                        updateProgress(90, `Compiling tax report...`);
+                        break;
+                    case 'complete':
+                        updateProgress(100, 'All reports successfully generated!');
+                        localStorage.setItem('lastSessionId', evt.data.session_id);
+                        if (hasFailedFiles) {
+                            showFailedFiles(evt.data.failed_files);
+                        }
+                        setTimeout(() => window.location.href = evt.data.results_url, 500);
+                        break;
+                    case 'fatal_error':
+                        throw new Error(evt.data.message || evt.data.error || 'Processing failed');
+                }
+            }
+        }
 
     } catch (error) {
         alert(error.message);
         resetUI();
     }
+}
+
+function parseSSEBlock(block) {
+    const lines = block.trim().split('\n');
+    let type = 'message';
+    let data = '';
+    for (const line of lines) {
+        if (line.startsWith('event: ')) type = line.slice(7);
+        else if (line.startsWith('data: ')) data = line.slice(6);
+    }
+    if (!data) return null;
+    try { data = JSON.parse(data); } catch {}
+    return { type, data };
+}
+
+function showFailedFiles(files) {
+    const container = document.getElementById('failed-files');
+    if (!container || !files || files.length === 0) return;
+    const list = files.map(f => `<li><strong>${f.file}</strong>: ${f.error}</li>`).join('');
+    container.innerHTML = `
+        <div class="alert alert-warning mt-3">
+            <h6 class="alert-heading">Some files could not be processed</h6>
+            <ul class="mb-0 small">${list}</ul>
+        </div>
+    `;
+    container.style.display = 'block';
 }
 
 function updateProgress(percent, status) {

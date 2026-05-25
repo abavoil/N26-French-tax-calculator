@@ -335,19 +335,87 @@ def build_transaction(d: Dict) -> Transaction:
 
 
 # ==========================================
-# Interface Adaptor for Web Pipeline
+# Per-file helper + model builder
 # ==========================================
-def parse_documents(pdf_paths: List[Path], use_cache: bool = True, progress_callback=None) -> Tuple[Dict, Dict, Dict]:
+
+def _process_single_pdf(pdf_path, annotation_cache, use_cache, seen_statement_ids):
+    """Process one PDF: cache lookup, OCR, extraction, dedup.
+
+    Returns (data_dict | None, cache_updated_bool).  Returns None for
+    duplicates.  Raises on unrecoverable per-file errors (OCRError,
+    CoordinateExtractionError, …).
     """
-    Parse multiple PDF files, utilizing an incremental raw annotation cache.
-    Args:
-        pdf_paths: List of PDF file paths
-        use_cache: Whether to use the OCR annotation cache
-        progress_callback: Optional callable(current, total, filename) called per file
-    """
-    logger.info(f"Parsing {len(pdf_paths)} PDF files")
-    
-    # 1. Load existing OCR annotations cache
+    file_key = f"{pdf_path.name}_{pdf_path.stat().st_size}"
+    data = None
+    cache_updated = False
+
+    if use_cache and file_key in annotation_cache:
+        logger.info(f"OCR Cache HIT for {pdf_path.name}")
+        annotations = annotation_cache[file_key]
+        try:
+            statement_id = get_closest_text(annotations, *DocumentCoordinates.statement_id)
+            data = extract_base_data(annotations, pdf_path, statement_id, detect_document_type(pdf_path.name))
+            if data["type"] == "dividend":
+                data = extract_dividend_data(annotations, data)
+            else:
+                data = extract_transaction_data(annotations, data)
+        except Exception as e:
+            logger.warning(f"Failed to extract from cache for {pdf_path.name}: {e}. Re-running OCR...")
+            data = None
+
+    if data is None:
+        logger.info(f"OCR Cache MISS - Running OCR for {pdf_path.name}")
+        doc = pymupdf.open(pdf_path)
+        raw_ann = annotate_page(doc[0])
+        annotations = [a for a in raw_ann if a.y >= 0.10]
+        doc.close()
+        logger.info(f"{pdf_path.name}: {len(annotations)} annotations (filtered from {len(raw_ann)})")
+
+        if not annotations:
+            raise OCRError(pdf_path.name)
+
+        statement_id = get_closest_text(annotations, *DocumentCoordinates.statement_id)
+        data = extract_base_data(annotations, pdf_path, statement_id, detect_document_type(pdf_path.name))
+        if data["type"] == "dividend":
+            data = extract_dividend_data(annotations, data)
+        else:
+            data = extract_transaction_data(annotations, data)
+
+        annotation_cache[file_key] = annotations
+        cache_updated = True
+
+    stmt_id = data['statement_id']
+    if stmt_id in seen_statement_ids:
+        logger.warning(f"Skipping duplicate: {pdf_path.name} (statement ID: {stmt_id})")
+        return None, cache_updated
+    seen_statement_ids.add(stmt_id)
+
+    return data, cache_updated
+
+
+def _build_models(all_data):
+    """Convert extracted dicts into Asset / Transaction / Dividend objects."""
+    assets: Dict[str, Asset] = {}
+    transactions: Dict[str, Transaction] = {}
+    dividends: Dict[str, Dividend] = {}
+    for d in all_data:
+        isin = d["asset_isin"]
+        if isin not in assets:
+            ticker, longname = lookup_isin(isin)
+            assets[isin] = Asset(title=d["asset_title"], isin=isin, ticker=ticker, longname=longname)
+        if d["type"] == "dividend":
+            div = build_dividend(d)
+            assets[isin].dividends.append(div)
+            dividends[div.document] = div
+        else:
+            tx = build_transaction(d)
+            assets[isin].transactions.append(tx)
+            transactions[tx.document] = tx
+    return assets, transactions, dividends
+
+
+def _load_annotation_cache(use_cache):
+    """Load the OCR annotation cache pickle, returning a dict."""
     annotation_cache = {}
     if use_cache and OCR_CACHE_FILE.exists():
         try:
@@ -356,80 +424,11 @@ def parse_documents(pdf_paths: List[Path], use_cache: bool = True, progress_call
             logger.info(f"Loaded {len(annotation_cache)} cached document annotations")
         except Exception as e:
             logger.warning(f"Cache load failed: {e}. Starting fresh...")
+    return annotation_cache
 
-    all_data = []
-    seen_statement_ids = set()
-    cache_updated = False
-    
-    for i, pdf_path in enumerate(pdf_paths, 1):
-        if progress_callback:
-            progress_callback(i, len(pdf_paths), pdf_path.name)
-        try:
-            data = None
-            # Compute a unique identifier for the file (e.g., filename + size) to prevent collisions
-            file_key = f"{pdf_path.name}_{pdf_path.stat().st_size}"
 
-            # Check if we have the RAW annotations for this file cached
-            if use_cache and file_key in annotation_cache:
-                logger.info(f"[{i}/{len(pdf_paths)}] OCR Cache HIT for {pdf_path.name}")
-                annotations = annotation_cache[file_key]
-                
-                # Re-run coordinate extraction on cached text (instant)
-                try:
-                    statement_id = get_closest_text(annotations, *DocumentCoordinates.statement_id)
-                    data = extract_base_data(annotations, pdf_path, statement_id, detect_document_type(pdf_path.name))
-                    if data["type"] == "dividend":
-                        data = extract_dividend_data(annotations, data)
-                    else:
-                        data = extract_transaction_data(annotations, data)
-                except Exception as e:
-                    logger.warning(f"Failed to extract fields from cached annotations for {pdf_path.name}: {e}. Re-running OCR...")
-                    data = None
-
-            # If no cache hit, run OCR
-            if data is None:
-                logger.info(f"[{i}/{len(pdf_paths)}] OCR Cache MISS - Running OCR for {pdf_path.name}")
-                # Open PDF and generate annotations
-                doc = pymupdf.open(pdf_path)
-                raw_ann = annotate_page(doc[0])
-                annotations = [a for a in raw_ann if a.y >= 0.10]
-                doc.close()
-                logger.info(f"[{i}/{len(pdf_paths)}] {pdf_path.name}: {len(annotations)} annotations (filtered from {len(raw_ann)})")
-
-                if not annotations:
-                    raise OCRError(pdf_path.name)
-
-                # Extract data
-                statement_id = get_closest_text(annotations, *DocumentCoordinates.statement_id)
-                data = extract_base_data(annotations, pdf_path, statement_id, detect_document_type(pdf_path.name))
-                if data["type"] == "dividend":
-                    data = extract_dividend_data(annotations, data)
-                else:
-                    data = extract_transaction_data(annotations, data)
-
-                # Save raw annotations to cache map
-                annotation_cache[file_key] = annotations
-                cache_updated = True
-
-            # Check for duplicates within this run
-            stmt_id = data['statement_id']
-            if stmt_id in seen_statement_ids:
-                logger.warning(f"Skipping duplicate: {pdf_path.name} (statement ID: {stmt_id})")
-                continue
-            seen_statement_ids.add(stmt_id)
-            all_data.append(data)
-            
-        except TaxCalcError:
-            raise
-        except Exception as e:
-            logger.error(f"Unexpected error parsing {pdf_path.name}: {e}")
-            raise PDFParsingError(pdf_path.name, str(e))
-    
-    if not all_data:
-        from utils.errors import NoValidDocumentsError
-        raise NoValidDocumentsError(len(pdf_paths))
-    
-    # Write updated annotations cache back to disk
+def _save_annotation_cache(annotation_cache, cache_updated):
+    """Persist the annotation cache to disk if it was modified."""
     if cache_updated:
         try:
             OCR_CACHE_FILE.parent.mkdir(exist_ok=True)
@@ -439,24 +438,97 @@ def parse_documents(pdf_paths: List[Path], use_cache: bool = True, progress_call
         except Exception as e:
             logger.warning(f"Could not save updated OCR cache: {e}")
 
-    # Build model objects
-    assets: Dict[str, Asset] = {}
-    transactions: Dict[str, Transaction] = {}
-    dividends: Dict[str, Dividend] = {}
 
-    for d in all_data:
-        isin = d["asset_isin"]
-        if isin not in assets:
-            ticker, longname = lookup_isin(isin)
-            assets[isin] = Asset(title=d["asset_title"], isin=isin, ticker=ticker, longname=longname)
+# ==========================================
+# Batch API (unchanged contract)
+# ==========================================
 
-        if d["type"] == "dividend":
-            div = build_dividend(d)
-            assets[isin].dividends.append(div)
-            dividends[div.document] = div
-        else:
-            tx = build_transaction(d)
-            assets[isin].transactions.append(tx)
-            transactions[tx.document] = tx
+def parse_documents(pdf_paths: List[Path], use_cache: bool = True, progress_callback=None) -> Tuple[Dict, Dict, Dict]:
+    """
+    Parse multiple PDF files, utilizing an incremental raw annotation cache.
 
-    return (assets, transactions, dividends)
+    Args:
+        pdf_paths: List of PDF file paths
+        use_cache: Whether to use the OCR annotation cache
+        progress_callback: Optional callable(current, total, filename) called per file
+    """
+    logger.info(f"Parsing {len(pdf_paths)} PDF files")
+    annotation_cache = _load_annotation_cache(use_cache)
+    all_data = []
+    seen_statement_ids = set()
+    cache_updated = False
+
+    for i, pdf_path in enumerate(pdf_paths, 1):
+        if progress_callback:
+            progress_callback(i, len(pdf_paths), pdf_path.name)
+        try:
+            data, file_cache_updated = _process_single_pdf(pdf_path, annotation_cache, use_cache, seen_statement_ids)
+            if data is not None:
+                all_data.append(data)
+            if file_cache_updated:
+                cache_updated = True
+        except TaxCalcError:
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error parsing {pdf_path.name}: {e}")
+            raise PDFParsingError(pdf_path.name, str(e))
+
+    if not all_data:
+        from utils.errors import NoValidDocumentsError
+        raise NoValidDocumentsError(len(pdf_paths))
+
+    _save_annotation_cache(annotation_cache, cache_updated)
+    return _build_models(all_data)
+
+
+# ==========================================
+# Streaming API (yields SSE-friendly events)
+# ==========================================
+
+def parse_documents_streaming(pdf_paths, use_cache=True):
+    """Yield ``("progress" | "file_error", dict)`` per file, then ``("result", dict)``.
+
+    ``"progress"`` events carry ``current``, ``total``, ``file``.
+    ``"file_error"`` events carry ``file`` and ``error`` — processing continues.
+    The final ``"result"`` event carries ``assets``, ``transactions``,
+    ``dividends`` and ``failed_files``.
+    """
+    logger.info(f"Streaming-parse of {len(pdf_paths)} PDF files")
+    annotation_cache = _load_annotation_cache(use_cache)
+    all_data = []
+    seen_statement_ids = set()
+    cache_updated = False
+    failed_files = []
+
+    for i, pdf_path in enumerate(pdf_paths, 1):
+        yield ("progress", {"current": i, "total": len(pdf_paths), "file": pdf_path.name})
+        try:
+            data, file_cache_updated = _process_single_pdf(pdf_path, annotation_cache, use_cache, seen_statement_ids)
+            if data is not None:
+                all_data.append(data)
+            if file_cache_updated:
+                cache_updated = True
+        except Exception as e:
+            detail = {"file": pdf_path.name, "error": str(e)}
+            failed_files.append(detail)
+            yield ("file_error", detail)
+            continue
+
+    _save_annotation_cache(annotation_cache, cache_updated)
+
+    if not all_data:
+        yield ("result", {
+            "assets": {},
+            "transactions": {},
+            "dividends": {},
+            "failed_files": failed_files,
+        })
+        return
+
+    assets, transactions, dividends = _build_models(all_data)
+    yield ("result", {
+        "assets": assets,
+        "transactions": transactions,
+        "dividends": dividends,
+        "failed_files": failed_files,
+    })

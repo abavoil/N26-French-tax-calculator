@@ -128,7 +128,7 @@ def test_two_assets_pipeline():
 def test_real_pdf_parsing():
     """Parse real N26 PDFs if available. Requires macOS + real PDFs."""
     pdf_dir = Path(__file__).parent / "fixtures" / "pdfs"
-    pdfs = sorted(pdf_dir.glob("*.pdf"))
+    pdfs = sorted(p for p in pdf_dir.glob("*.pdf") if p.name != "black.pdf")
 
     if not pdfs:
         pytest.skip("No PDF files in test-pdfs/")
@@ -146,7 +146,7 @@ def test_real_pdf_golden_output():
     """Full pipeline on real PDFs: compare output against golden expected files.
     Requires macOS + real PDFs."""
     pdf_dir = Path(__file__).parent / "fixtures" / "pdfs"
-    pdfs = sorted(pdf_dir.glob("*.pdf"))
+    pdfs = sorted(p for p in pdf_dir.glob("*.pdf") if p.name != "black.pdf")
     if not pdfs:
         pytest.skip("No PDF files in test-pdfs/")
 
