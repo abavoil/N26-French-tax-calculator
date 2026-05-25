@@ -76,7 +76,6 @@ def lookup_isin(isin: str) -> Tuple[str, str]:
 
 class DocumentCoordinates:
     # Original coordinates mapped down to [0.0 - 1.0] scale
-    account_number = (0.686, 0.728, "left")
     asset_title = (0.135, 0.620, "left")
     asset_isin = (0.864, 0.623, "right")
     quantity = (0.136, 0.574, "left")
@@ -245,7 +244,6 @@ def extract_base_data(annotations: List[Annotation], pdf_path: Path, statement_i
         "type": doc_type,
         "document": str(pdf_path),
         "statement_id": statement_id,
-        "account_number": get_closest_text(annotations, *DocumentCoordinates.account_number),
         "asset_title": get_text_row(annotations, *DocumentCoordinates.asset_title),
         "asset_isin": get_closest_text(annotations, *DocumentCoordinates.asset_isin),
         "quantity": get_text_row(annotations, *DocumentCoordinates.quantity),
