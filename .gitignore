@@ -41,6 +41,7 @@ env/
 .n26-tax-calc/
 output/
 cache/
+core/cache_isin_to_ticker.json
 logs/
 *.log
 *.pickle
