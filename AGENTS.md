@@ -1,5 +1,9 @@
 # CRITICAL RULES - MUST FOLLOW
 
+- USE UV TO INSTALL PYTHON PACKAGES
+- DO NOT OPEN PDFs
+- GIT COMMIT REGULARLY
+
 ## RESPONSES
 
 - Keep responses concise and to the point - unless the user asks otherwise
