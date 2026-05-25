@@ -30,7 +30,7 @@ class BuyTransaction(Transaction):
 
 @dataclass
 class SellTransaction(Transaction):
-    _pdf_capital_gain: Decimal = Decimal("0.0")
+    pass
 
 
 @dataclass

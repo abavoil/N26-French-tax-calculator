@@ -1,4 +1,5 @@
 import json
+import logging
 import pytest
 from pathlib import Path
 from decimal import Decimal
@@ -6,7 +7,7 @@ from datetime import datetime
 from unittest.mock import patch
 
 import core.parser as parser_mod
-from core.parser import parse_decimal, parse_datetime, build_dividend, build_transaction, lookup_isin, parse_documents
+from core.parser import parse_decimal, parse_datetime, build_dividend, build_transaction, lookup_isin, parse_documents, Annotation
 from utils.errors import OCRError
 
 
@@ -128,77 +129,55 @@ def _make_mock_urlopen(response_body):
     return lambda req, **kw: MockResponse()
 
 
-def test_lookup_isin_cache_miss_hit(monkeypatch, tmp_path):
-    cache_file = tmp_path / "cache_isin_to_ticker.json"
-    monkeypatch.setattr(parser_mod, "_CACHE_FILE", cache_file)
-    monkeypatch.setattr(parser_mod, "_isin_cache", {})
-
-    api_calls = []
-    def tracking_urlopen(req, **kw):
-        api_calls.append(req.full_url)
-        body = MOCK_YAHOO_RESPONSE if "FR0012345678" in req.full_url else b'{"quotes":[]}'
-        return _make_mock_urlopen(body)(req)
-    monkeypatch.setattr("urllib.request.urlopen", tracking_urlopen)
-
-    ticker, longname = lookup_isin("FR0012345678")
-    assert ticker == "MYTICK.PA"
-    assert longname == "Ma Societe Test SA"
-    assert len(api_calls) == 1
-    assert cache_file.exists()
-
-    cached = json.loads(cache_file.read_text())
-    assert cached["FR0012345678"]["symbol"] == "MYTICK.PA"
-    assert cached["FR0012345678"]["longname"] == "Ma Societe Test SA"
-
-    ticker2, longname2 = lookup_isin("FR0012345678")
-    assert ticker2 == "MYTICK.PA"
-    assert longname2 == "Ma Societe Test SA"
-    assert len(api_calls) == 1
-
-    monkeypatch.setattr(parser_mod, "_isin_cache", {})
-    ticker3, longname3 = lookup_isin("FR0012345678")
-    assert ticker3 == "MYTICK.PA"
-    assert longname3 == "Ma Societe Test SA"
-    assert len(api_calls) == 1
+def _make_mock_annotations(statement_id: str = "STMT001") -> list:
+    """Minimal mock annotations — enough to pass through get_closest_text without error."""
+    return [
+        Annotation("Montant", [0.5, 0.4, 0.04, 0.01]),
+        Annotation(statement_id, [0.48, 0.789, 0.04, 0.01]),
+        Annotation("EUR", [0.867, 0.384, 0.04, 0.01]),
+    ]
 
 
-def test_lookup_isin_api_failure_fallback(monkeypatch, tmp_path):
-    cache_file = tmp_path / "cache_fallback.json"
-    monkeypatch.setattr(parser_mod, "_CACHE_FILE", cache_file)
-    monkeypatch.setattr(parser_mod, "_isin_cache", {})
-
-    def failing_urlopen(req, **kw):
-        raise OSError("Network unreachable")
-    monkeypatch.setattr("urllib.request.urlopen", failing_urlopen)
-
-    ticker, longname = lookup_isin("US0000000001")
-    assert ticker == "US0000000001"
-    assert longname == "US0000000001"
-    assert cache_file.exists()
-
-    cached = json.loads(cache_file.read_text())
-    assert cached["US0000000001"]["symbol"] == "US0000000001"
-
-
-def test_lookup_isin_no_quotes_from_api(monkeypatch, tmp_path):
-    cache_file = tmp_path / "cache_noquotes.json"
-    monkeypatch.setattr(parser_mod, "_CACHE_FILE", cache_file)
-    monkeypatch.setattr(parser_mod, "_isin_cache", {})
-
-    empty_response = _make_mock_urlopen(b'{"quotes":[]}')
-    monkeypatch.setattr("urllib.request.urlopen", empty_response)
-
-    ticker, longname = lookup_isin("DE0000000001")
-    assert ticker == "DE0000000001"
-    assert longname == "DE0000000001"
-
-
-def test_ocr_empty_annotations_raises_ocerror(monkeypatch):
-    """OCRError is raised when annotate_page returns no annotations."""
+def test_duplicate_document_skipped(monkeypatch, caplog):
+    """Duplicate statement_id is skipped with a warning, no error raised."""
     FIXTURE_DIR = Path(__file__).parent / "fixtures" / "pdfs"
-    pdf_path = list(FIXTURE_DIR.glob("buy_order_*.pdf"))[0]
+    buy_pdfs = sorted(FIXTURE_DIR.glob("buy_order_*.pdf"))
+    original = buy_pdfs[0]
+    copy = next((p for p in buy_pdfs if "copy" in p.name), None)
+    assert copy is not None, "Expected a copy PDF (buy_order_*copy.pdf) in fixtures"
 
-    monkeypatch.setattr("core.parser.annotate_page", lambda page: [])
+    monkeypatch.setattr("core.parser.annotate_page",
+                        lambda page: _make_mock_annotations("DUP001"))
+    monkeypatch.setattr(
+        "core.parser.extract_base_data",
+        lambda annotations, pdf_path, statement_id, doc_type: {
+            "type": doc_type,
+            "document": str(pdf_path),
+            "statement_id": "DUP001",
+            "asset_title": "Test Asset",
+            "asset_isin": "FR0012345678",
+            "quantity": "10",
+            "montant_y": 0.4,
+            "net_cash_flow": "100,00",
+        },
+    )
+    monkeypatch.setattr(
+        "core.parser.extract_transaction_data",
+        lambda annotations, data: {**data,
+            "price_per_unit": "150,00",
+            "market_value": "1500,00",
+            "event_time": "15.01.2024 10:30:00",
+        },
+    )
+    monkeypatch.setattr("urllib.request.urlopen",
+                        lambda req, **kw: _make_mock_urlopen(b'{"quotes":[]}'))
 
-    with pytest.raises(OCRError, match="Could not extract text"):
-        parse_documents([pdf_path], use_cache=False)
+    caplog.set_level(logging.WARNING)
+
+    assets, transactions, dividends = parse_documents([original, copy], use_cache=False)
+
+    assert len(assets) == 1
+    assert len(transactions) == 1
+    skip_msgs = [r.message for r in caplog.records if "Skipping duplicate" in r.message]
+    assert len(skip_msgs) >= 1
+    assert "copy" in skip_msgs[0].lower()

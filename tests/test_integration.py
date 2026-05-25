@@ -2,6 +2,8 @@
 Integration tests: full pipeline from parsed data to Excel export.
 These tests do NOT require real PDFs or macOS — they use pre-built model data.
 """
+import csv
+import json
 import tempfile
 from pathlib import Path
 from decimal import Decimal
@@ -137,3 +139,53 @@ def test_real_pdf_parsing():
     assert len(assets) > 0
     assert len(transactions) + len(dividends) > 0
     assert all(isinstance(a, Asset) for a in assets.values())
+
+
+@pytest.mark.skipif(not (Path(__file__).parent / "fixtures" / "pdfs").exists(), reason="No tests/fixtures/pdfs/ directory")
+def test_real_pdf_golden_output():
+    """Full pipeline on real PDFs: compare output against golden expected files.
+    Requires macOS + real PDFs."""
+    pdf_dir = Path(__file__).parent / "fixtures" / "pdfs"
+    pdfs = sorted(pdf_dir.glob("*.pdf"))
+    if not pdfs:
+        pytest.skip("No PDF files in test-pdfs/")
+
+    expected_dir = Path(__file__).parent / "fixtures" / "expected"
+    expected_json = expected_dir / "tax_reports.json"
+    expected_csv = expected_dir / "audit_trail.csv"
+    if not expected_json.exists() or not expected_csv.exists():
+        pytest.skip("Golden expected files not found")
+
+    with open(expected_json) as f:
+        expected_reports = json.load(f)
+
+    from core.parser import parse_documents
+    from core.calculator import compute_tax_data
+
+    assets, _, _ = parse_documents(pdfs, use_cache=False)
+    audit_rows, dashboards, _, _ = compute_tax_data(assets)
+
+    for expected in expected_reports:
+        year = expected["year"]
+        dashboard = next((d for d in dashboards if d.year == year), None)
+        assert dashboard is not None, f"Missing dashboard for year {year}"
+
+        for exp_decl in expected["declarations"]:
+            act_decl = next(
+                d for d in dashboard.declarations
+                if d.form == exp_decl["form"] and d.box == exp_decl["box"]
+            )
+            if exp_decl["box"] == "8UU":
+                assert act_decl.value == 1
+            else:
+                assert act_decl.value == pytest.approx(exp_decl["value"], rel=0.01)
+
+        assert len(dashboard.form_2047_details) == len(expected["form_2047_details"])
+        for act, exp in zip(dashboard.form_2047_details, expected["form_2047_details"]):
+            assert act["L202_Pays"] == exp["L202_Pays"]
+            assert act["L203_Montant_net_encaisse"] == pytest.approx(exp["L203_Montant_net_encaisse"], rel=0.01)
+            assert act["L206_Impot_supporte_etranger"] == pytest.approx(exp["L206_Impot_supporte_etranger"], rel=0.01)
+
+    with open(expected_csv) as f:
+        expected_rows = list(csv.DictReader(f))
+    assert len(audit_rows) == len(expected_rows)

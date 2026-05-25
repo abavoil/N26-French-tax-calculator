@@ -64,28 +64,6 @@ class NonEURError(TaxCalcError):
         )
 
 
-class DuplicateDocumentError(TaxCalcError):
-    """Raised when same document processed twice."""
-
-    def __init__(self, statement_id: str, filename: str):
-        super().__init__(
-            title="Duplicate Document",
-            message=f"Document '{filename}' appears to be a duplicate (statement ID: {statement_id}).",
-            suggestion="Remove the duplicate and re-upload.",
-        )
-
-
-class InvalidFolderError(TaxCalcError):
-    """Raised when folder structure is invalid."""
-
-    def __init__(self, folder: str):
-        super().__init__(
-            title="Invalid Folder",
-            message=f"Folder '{folder}' does not exist or is not readable.",
-            suggestion="Check the path and ensure you have read permissions.",
-        )
-
-
 class NoValidDocumentsError(TaxCalcError):
     """Raised when no valid documents found."""
 

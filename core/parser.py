@@ -128,10 +128,6 @@ class Annotation:
         self.w = bbox[2]
         self.h = bbox[3]
 
-    @property
-    def x_mid(self) -> float:
-        return self.x + (self.w / 2.0)
-
     def __repr__(self) -> str:
         return f"({self.text!r}, [{self.x:.3f}, {self.y:.3f}, {self.w:.3f}, {self.h:.3f}])"
 
@@ -292,48 +288,6 @@ def extract_transaction_data(annotations: List[Annotation], data: Dict) -> Dict:
     return data
 
 
-def parse_pdf_file(pdf_path: Path) -> Dict:
-    """Parses single N26 file with direct coordinates extraction."""
-    try:
-        doc_type = detect_document_type(pdf_path.name)
-    except ValueError as e:
-        raise PDFParsingError(pdf_path.name, str(e))
-
-    try:
-        doc = pymupdf.open(pdf_path)
-        raw_ann = annotate_page(doc[0])
-        # Skip standard header information sitting in the top 10% of the page
-        annotations = [a for a in raw_ann if a.y >= 0.10]
-        doc.close()
-        logger.info(f"{pdf_path.name}: {len(annotations)} usable annotations (filtered from {len(raw_ann)})")
-    except Exception as e:
-        logger.exception(f"System error while reading PDF or running OCR on {pdf_path.name}")
-        raise OCRError(pdf_path.name)
-
-    if not annotations:
-        logger.error(f"OCR returned 0 annotations for {pdf_path.name}. Vision engine might have failed.")
-        raise OCRError(pdf_path.name)
-
-    # Resolve document contents based on layout configurations
-    try:
-        statement_id = get_closest_text(annotations, *DocumentCoordinates.statement_id)
-        data = extract_base_data(annotations, pdf_path, statement_id, doc_type)
-        
-        if doc_type == "dividend":
-            data = extract_dividend_data(annotations, data)
-        else:
-            data = extract_transaction_data(annotations, data)
-            
-    except ValueError as e:
-        if "non-EUR" in str(e):
-            raise NonEURError(pdf_path.name)
-        raise CoordinateExtractionError(pdf_path.name, str(e))
-    except Exception as e:
-        raise CoordinateExtractionError(pdf_path.name, str(e))
-
-    return data
-
-
 # ==========================================
 # Model Builders
 # ==========================================
@@ -377,8 +331,7 @@ def build_transaction(d: Dict) -> Transaction:
     if d["type"] == "buy":
         return BuyTransaction(**base_kwargs)
     elif d["type"] == "sell":
-        pdf_gain = parse_decimal(d.get("capital_gain", "0"))
-        return SellTransaction(**base_kwargs, _pdf_capital_gain=pdf_gain)
+        return SellTransaction(**base_kwargs)
 
 
 # ==========================================

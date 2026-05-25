@@ -25,7 +25,6 @@ def _make_sell() -> SellTransaction:
         event_time=datetime(2024, 6, 15, 14, 0, 0),
         quantity=Decimal("5"), price_per_unit=Decimal("150"),
         market_value=Decimal("750"), net_cash_flow=Decimal("745"),
-        _pdf_capital_gain=Decimal("250"),
     )
     t.capital_gain = Decimal("250")
     return t
