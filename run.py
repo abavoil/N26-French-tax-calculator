@@ -61,9 +61,8 @@ def main():
 
     # Single-threaded mode: macOS Vision's livetext framework uses an XPC
     # service that stalls or fails when called from background threads.
-    # The /process-progress polling endpoint cannot serve concurrently, so
-    # the progress bar will stay at "Processing..." until OCR completes.
-    # See ROADMAP.md "Known Issues" for details.
+    # Progress is reported via SSE streaming within the /process request
+    # itself, so no concurrent request serving is needed.
     #
     # The --debug flag has the same effect: Werkzeug's stat-reloader spawns
     # a subprocess via fork/exec, and the XPC connection does not survive
